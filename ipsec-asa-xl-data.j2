@@ -1,0 +1,8 @@
+ 
+
+{%- for local in v4_local_ip %}
+{%- for remote in v4_remote_ip %}
+access-list 100 permit ip {{local}} {{remote}} 
+{%- endfor %}
+{%- endfor %}
+ 

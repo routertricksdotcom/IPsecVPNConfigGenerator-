@@ -1,0 +1,25 @@
+crypto isakmp policy 10
+ authentication pre-share
+
+crypto isakmp key {{psk}} address {{remote_endpoint}}
+
+crypto ipsec transform-set TS-{{policyname}} {{p2_encryption}} {{p2_auth}} 
+
+access-list 100 remark {{policyname}}_ACL
+access-list 100 remark IPSec Rule
+
+{%- for local in v4_local_ip %}
+{%- for remote in v4_remote_ip %}
+access-list 100 permit ip {{local}} {{remote}} 
+{%- endfor %}
+{%- endfor %}
+
+
+crypto map {{policyname}} 1 ipsec-isakmp 
+ description Tunnel to{{remote_endpoint}}
+ set peer {{remote_endpoint}}
+ set transform-set TS-{{policyname}}
+ match address 100
+
+interface {{external_interface}}
+  crypto map {{policyname}}

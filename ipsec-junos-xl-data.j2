@@ -1,0 +1,142 @@
+security {
+    ike {
+    {%- if proposal_set %}
+        policy {{ policyname }} {
+            mode main;
+            proposal-set {{ proposal_set }};
+            pre-shared-key ascii-text "{{ psk }}";
+        }
+    {%- else %}
+        proposal {{ policyname }} {
+			authentication-method pre-shared-keys;
+            authentication-algorithm {{ p1_auth }};
+            dh-group group{{ p1_dh_group }};
+            encryption-algorithm {{ p1_encryption }};
+            lifetime-seconds {{ p1_lifetime_sec }};
+        }
+        policy {{ policyname }} {
+            mode {{ mode }};
+            proposals {{ policyname }};
+            pre-shared-key ascii-text "{{ psk }}";
+        }
+    {%- endif %}
+        gateway {{ policyname }} {
+            ike-policy {{ policyname }};
+            address {{ remote_endpoint }};
+            no-nat-traversal;
+            external-interface {{ external_interface }};
+        }
+    }
+    ipsec {
+    {%- if proposal_set %}
+        policy {{ policyname }} {
+            proposal-set {{ proposal_set }};
+        }
+    {%- else %}
+        proposal {{ policyname }} {
+            authentication-algorithm {{ p2_auth }};
+            encryption-algorithm {{ p2_encryption }};
+            lifetime-seconds {{ p2_lifetime_sec }};
+            protocol {{ p2_protocol }};
+        {%- if p2_lifetime_kb %}
+            lifetime-kilobytes {{ p2_lifetime_kb }};
+        {%- endif %}
+        }
+        policy {{ policyname }} {
+            proposals {{ policyname }};
+        }
+    {%- endif %}
+        vpn {{ policyname }} {
+            bind-interface {{ tunnel_interface }};
+            ike {
+                gateway {{ policyname }};
+                idle-time 60;
+                no-anti-replay;
+                ipsec-policy {{ policyname }};
+                install-interval 0;
+            }
+        {%- for local in v4_local_ip %}
+            {%- for remote in v4_remote_ip %}
+            traffic-selector {{ local }}_{{ remote }} {
+                local-ip {{ local }};
+                remote-ip {{ remote }};
+            }
+            {%- endfor %}
+        {%- endfor %}
+        }
+    }
+    address-book {
+        global {
+        {%- for local in v4_local_ip %}
+            address local-{{ local }} {{ local }};
+        {%- endfor %}
+        {%- for remote in v4_remote_ip %}
+            address remote-{{ remote }} {{ remote }};
+        {%- endfor %}
+        }
+    }
+    policies {
+        from-zone {{ trust_zone }} to-zone {{ tunnel_zone }} {
+            policy {{ trust_zone }}-to-{{ tunnel_zone }} {
+                match {
+                    source-address [ {%- for local in v4_local_ip %} local-{{ local }} {%- endfor %} ];
+                    destination-address [ {%- for remote in v4_remote_ip %} remote-{{ remote }} {%- endfor %} ];
+                    application any;
+                }
+                then {
+                    permit;
+                }
+            }
+        }
+        from-zone {{ tunnel_zone }} to-zone {{ trust_zone }} {
+            policy {{ tunnel_zone }}-to-{{ trust_zone }} {
+                match {
+                    source-address [ {%- for remote in v4_remote_ip %} remote-{{ remote }} {%- endfor %} ];
+                    destination-address [ {%- for local in v4_local_ip %} local-{{ local }} {%- endfor %} ];
+                    application any;
+                }
+                then {
+                    permit;
+                }
+            }
+        }
+    }
+    zones {
+    {%- if external_zone %}
+        security-zone {{ external_zone }} {
+            host-inbound-traffic {
+                system-services {
+                    ike;
+                }
+            }
+            interfaces {
+                {{ external_interface }};
+            }
+        }
+    {%- else %}
+        security-zone untrust {
+            host-inbound-traffic {
+                system-services {
+                    ike;
+                }
+            }
+            interfaces {
+                {{ external_interface }};
+            }
+        }
+    {%- endif %}
+        security-zone {{ tunnel_zone }} {
+            host-inbound-traffic {
+                system-services {
+                    all;
+                }
+                protocols {
+                    all;
+                }
+            }
+            interfaces {
+                {{ tunnel_interface }};
+            }
+        }
+    }
+}
