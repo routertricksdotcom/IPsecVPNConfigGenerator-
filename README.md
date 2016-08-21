@@ -6,6 +6,7 @@ Python Lib requirments
  
 openpyxl  
 glob  
-jinja2  
+jinja2
+netaddr
 yaml
 #################
